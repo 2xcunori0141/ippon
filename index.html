@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IPPONグランプリ 判定・集計システム</title>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #0d0d0d;
+      --panel-bg: rgba(25, 25, 25, 0.85);
+      --yellow: #ffd700;
+      --gold-glow: #ffaa00;
+      --text: #ffffff;
+      --accent: #ff3333;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text);
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    /* 役割選択画面 */
+    .setup-screen {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+      z-index: 10;
+    }
+
+    .title {
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: var(--yellow);
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #333, #111);
+      border: 2px solid var(--yellow);
+      color: var(--yellow);
+      padding: 18px 24px;
+      font-size: 1.2rem;
+      font-weight: bold;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+      background: var(--yellow);
+      color: #000;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #d4af37, #8a7322);
+      color: #000;
+      border: none;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 14px;
+      font-size: 1.2rem;
+      border-radius: 8px;
+      border: 2px solid #444;
+      background: #222;
+      color: #fff;
+      text-align: center;
+      outline: none;
+    }
+
+    .input-field:focus {
+      border-color: var(--yellow);
+    }
+
+    /* 親機画面 */
+    .main-screen {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    /* 接続情報ヘッダー */
+    .connection-bar {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      right: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--panel-bg);
+      padding: 12px 20px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      z-index: 5;
+    }
+
+    .qr-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .qr-code {
+      width: 70px;
+      height: 70px;
+      background: #fff;
+      padding: 4px;
+      border-radius: 6px;
+    }
+
+    /* 中央メインコンテンツ */
+    .stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex-grow: 1;
+      width: 100%;
+      margin-top: 60px;
+    }
+
+    /* 回答者選択＆表示バー */
+    .player-selector-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 25px;
+      background: rgba(0,0,0,0.6);
+      padding: 8px 18px;
+      border-radius: 30px;
+      border: 1px solid var(--yellow);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .player-select {
+      background: #111;
+      color: var(--yellow);
+      border: 1px solid #555;
+      padding: 8px 15px;
+      font-size: 1.1rem;
+      border-radius: 20px;
+      outline: none;
+      font-weight: bold;
+    }
+
+    .icon-btn {
+      background: none;
+      border: none;
+      color: var(--yellow);
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255, 215, 0, 0.2);
+    }
+
+    .current-player-display {
+      font-size: 2.2rem;
+      font-weight: bold;
+      color: #fff;
+      margin-bottom: 10px;
+      letter-spacing: 2px;
+      text-shadow: 0 0 8px rgba(255,255,255,0.4);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .current-player-display:hover::after {
+      content: ' ✏️';
+      font-size: 1.2rem;
+    }
+
+    /* 得点メーター */
+    .meter-container {
+      display: flex;
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .lamp {
+      width: 45px;
+      height: 80px;
+      background: #222;
+      border: 3px solid #444;
+      border-radius: 8px;
+      transition: all 0.15s ease;
+      box-shadow: inset 0 0 10px #000;
+    }
+
+    .lamp.active {
+      background: radial-gradient(circle, #fff 10%, var(--yellow) 60%, var(--gold-glow) 100%);
+      border-color: #fff;
+      box-shadow: 0 0 25px var(--yellow), inset 0 0 10px #fff;
+    }
+
+    .score-text {
+      font-size: 5rem;
+      font-weight: 900;
+      color: var(--yellow);
+      font-family: monospace;
+      line-height: 1;
+    }
+
+    /* スコアボード（集計用） */
+    .scoreboard {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      background: var(--panel-bg);
+      border: 1px solid var(--yellow);
+      border-radius: 12px;
+      padding: 15px 20px;
+      min-width: 260px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+    }
+
+    .scoreboard-title {
+      font-size: 1rem;
+      color: var(--yellow);
+      border-bottom: 1px solid #444;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .score-list {
+      list-style: none;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .score-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      font-size: 1.1rem;
+      border-bottom: 1px dashed #333;
+    }
+
+    .score-item-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .score-count {
+      color: var(--yellow);
+      font-weight: bold;
+      font-size: 1.3rem;
+    }
+
+    /* IPPON 演出オーバーレイ */
+    .ippon-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .ippon-text {
+      font-size: 12rem;
+      font-weight: 900;
+      font-style: italic;
+      color: var(--yellow);
+      text-shadow: 0 0 30px var(--yellow), 0 0 60px var(--gold-glow), 5px 5px 0px #000;
+      letter-spacing: 5px;
+    }
+
+    .ippon-winner {
+      font-size: 3rem;
+      color: #fff;
+      margin-top: -20px;
+      font-weight: bold;
+      text-shadow: 0 0 15px rgba(255,255,255,0.8);
+    }
+
+    /* 子機（リモコン）画面 */
+    .controller-screen {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .push-btn {
+      width: 80vw;
+      height: 80vw;
+      max-width: 320px;
+      max-height: 320px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #ff5555 0%, #aa0000 100%);
+      border: 8px solid #ff8888;
+      box-shadow: 0 10px 30px rgba(255, 0, 0, 0.5), inset 0 5px 15px rgba(255,255,255,0.4);
+      color: #fff;
+      font-size: 2.2rem;
+      font-weight: 900;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: transform 0.1s;
+    }
+
+    .push-btn:active {
+      transform: scale(0.92);
+      box-shadow: 0 2px 10px rgba(255, 0, 0, 0.5);
+    }
+
+    .push-btn:disabled {
+      background: #444;
+      border-color: #666;
+      box-shadow: none;
+      color: #888;
+    }
+
+    .my-votes {
+      font-size: 1.2rem;
+      background: #222;
+      padding: 10px 20px;
+      border-radius: 20px;
+      border: 1px solid #444;
+    }
+
+    @keyframes popIn {
+      0% { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 101;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 初期選択画面 -->
+  <div id="setup-screen" class="setup-screen">
+    <div class="title">IPPON GRAND PRIX</div>
+    <button class="btn btn-primary" onclick="initHost()">親機（メイン表示）をつくる</button>
+    <hr style="border:0; border-top:1px solid #333; margin: 10px 0;">
+    <input type="text" id="room-id-input" class="input-field" placeholder="ルームIDを入力">
+    <button class="btn" onclick="initClient()">審判リモコン（子機）で参加</button>
+  </div>
+
+  <!-- 親機画面 -->
+  <div id="main-screen" class="main-screen">
+    <div class="connection-bar">
+      <div>
+        <div style="font-size:0.8rem; color:#aaa;">ROOM ID</div>
+        <div id="display-room-id" style="font-size:1.4rem; font-weight:bold; color:var(--yellow);">----</div>
+        <div style="font-size:0.75rem; color:#888; margin-top:2px;">接続審判: <span id="peer-count">0</span>名</div>
+      </div>
+      <div class="qr-container">
+        <div style="font-size:0.75rem; color:#aaa; text-align:right;">スマホで読み取り<br>リモコン接続</div>
+        <img id="qr-image" class="qr-code" src="" alt="QR">
+      </div>
+    </div>
+
+    <div class="stage">
+      <div class="player-selector-bar">
+        <label for="player-select" style="color:#aaa; font-size:0.9rem;">回答者:</label>
+        <select id="player-select" class="player-select" onchange="changePlayer()">
+          <!-- 動的追加 -->
+        </select>
+        <button class="icon-btn" onclick="editCurrentPlayerName()" title="現在の回答者名を変更">✏️ 名前変更</button>
+        <button class="icon-btn" onclick="addPlayerPrompt()" title="回答者を追加">＋ 追加</button>
+        <button class="icon-btn" onclick="deleteCurrentPlayer()" style="color:var(--accent);" title="選択中の回答者を削除">🗑️ 削除</button>
+      </div>
+
+      <div id="current-player-name" class="current-player-display" onclick="editCurrentPlayerName()" title="クリックで名前を変更">回答者A</div>
+
+      <div class="meter-container" id="meter">
+        <div class="lamp"></div>
+        <div class="lamp"></div>
+        <div class="lamp"></div>
+        <div class="lamp"></div>
+        <div class="lamp"></div>
+        <div class="lamp"></div>
+      </div>
+
+      <div class="score-text"><span id="score">0</span> / 6</div>
+
+      <div style="margin-top: 25px; display:flex; gap:10px;">
+        <button class="btn" style="padding:10px 20px; font-size:0.9rem;" onclick="addPoint(1)">+1 (テスト)</button>
+        <button class="btn" style="padding:10px 20px; font-size:0.9rem; border-color:var(--accent); color:var(--accent);" onclick="resetRound()">判定リセット</button>
+      </div>
+    </div>
+
+    <!-- 獲得本数スコアボード -->
+    <div class="scoreboard">
+      <div class="scoreboard-title">
+        <span>🏆 一本獲得数</span>
+        <button onclick="resetAllScores()" style="background:none; border:none; color:#888; font-size:0.75rem; cursor:pointer;">リセット</button>
+      </div>
+      <ul id="score-list" class="score-list">
+        <!-- 動的追加 -->
+      </ul>
+    </div>
+  </div>
+
+  <!-- IPPON 演出画面 -->
+  <div id="ippon-overlay" class="ippon-overlay" onclick="closeIppon()">
+    <div class="ippon-text">IPPON!!</div>
+    <div id="ippon-winner-name" class="ippon-winner">回答者名</div>
+  </div>
+
+  <canvas id="confetti"></canvas>
+
+  <!-- 子機（リモコン）画面 -->
+  <div id="controller-screen" class="controller-screen">
+    <div style="text-align:center;">
+      <div style="font-size:0.9rem; color:#aaa;">審判リモコン</div>
+      <div id="client-status" style="font-size:1.1rem; color:var(--yellow); font-weight:bold; margin-top:4px;">接続完了</div>
+    </div>
+
+    <button id="vote-btn" class="push-btn" onclick="sendVote()">押す！</button>
+
+    <div class="my-votes">
+      投入済み: <span id="my-vote-count" style="color:var(--yellow); font-weight:bold;">0</span> / 2 点
+    </div>
+  </div>
+
+  <script>
+    // --- Web Audio API 効果音エンジン ---
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioCtx();
+    }
+
+    // 各点数加算音
+    function playPointSound(score) {
+      initAudio();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      
+      const baseFreq = 220;
+      osc.frequency.setValueAtTime(baseFreq * Math.pow(1.12, score), audioCtx.currentTime);
+
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.3);
+    }
+
+    // IPPON ファンファーレ
+    function playIpponFanfare() {
+      initAudio();
+      const now = audioCtx.currentTime;
+      const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99]; // C E G C E G
+      
+      notes.forEach((freq, idx) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+        
+        gain.gain.setValueAtTime(0.4, now + idx * 0.08);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.6);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now + idx * 0.08);
+        osc.stop(now + idx * 0.08 + 0.6);
+      });
+    }
+
+    // --- アプリ状態管理 ---
+    let peer = null;
+    let connections = [];
+    let currentScore = 0;
+    const MAX_SCORE = 6;
+    
+    // 回答者とIPPON獲得数
+    let players = ["回答者A", "回答者B", "回答者C"];
+    let scores = { "回答者A": 0, "回答者B": 0, "回答者C": 0 };
+    let currentPlayer = "回答者A";
+
+    // 子機側状態
+    let myVotes = 0;
+
+    // --- URLクエリパラメータ確認 (QR接続時) ---
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get('room');
+      if (room) {
+        document.getElementById('room-id-input').value = room;
+        initClient();
+      }
+    });
+
+    // --- 親機（ホスト）処理 ---
+    function initHost() {
+      document.getElementById('setup-screen').style.display = 'none';
+      document.getElementById('main-screen').style.display = 'flex';
+
+      const roomId = 'ippon-' + Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('display-room-id').innerText = roomId;
+
+      // QRコードのセットアップ
+      const baseURL = window.location.href.split('?')[0];
+      const connectURL = `${baseURL}?room=${roomId}`;
+      const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(connectURL)}`;
+      document.getElementById('qr-image').src = qrApi;
+
+      updatePlayerSelect();
+      updateScoreboard();
+
+      peer = new Peer(roomId);
+
+      peer.on('open', () => {
+        console.log('Host initialized with ID:', roomId);
+      });
+
+      peer.on('connection', (conn) => {
+        connections.push(conn);
+        updatePeerCount();
+
+        conn.on('data', (data) => {
+          if (data.type === 'VOTE') {
+            addPoint(1);
+          }
+        });
+
+        conn.on('close', () => {
+          connections = connections.filter(c => c !== conn);
+          updatePeerCount();
+        });
+      });
+    }
+
+    function updatePeerCount() {
+      document.getElementById('peer-count').innerText = connections.length;
+    }
+
+    // --- 得点管理 ＆ IPPON 判定 ---
+    function addPoint(val) {
+      if (currentScore >= MAX_SCORE) return;
+
+      currentScore = Math.min(MAX_SCORE, currentScore + val);
+      updateMeter();
+      playPointSound(currentScore);
+
+      if (currentScore === MAX_SCORE) {
+        triggerIppon();
+      }
+    }
+
+    function updateMeter() {
+      const lamps = document.querySelectorAll('.lamp');
+      lamps.forEach((lamp, idx) => {
+        if (idx < currentScore) {
+          lamp.classList.add('active');
+        } else {
+          lamp.classList.remove('active');
+        }
+      });
+      document.getElementById('score').innerText = currentScore;
+    }
+
+    function resetRound() {
+      currentScore = 0;
+      updateMeter();
+      connections.forEach(conn => conn.send({ type: 'RESET' }));
+    }
+
+    function triggerIppon() {
+      scores[currentPlayer] = (scores[currentPlayer] || 0) + 1;
+      updateScoreboard();
+
+      document.getElementById('ippon-winner-name').innerText = `${currentPlayer} 獲得！`;
+      document.getElementById('ippon-overlay').style.display = 'flex';
+      playIpponFanfare();
+      startConfetti();
+    }
+
+    function closeIppon() {
+      document.getElementById('ippon-overlay').style.display = 'none';
+      stopConfetti();
+      resetRound();
+    }
+
+    // --- 回答者・スコア管理機能 ---
+    function updatePlayerSelect() {
+      const select = document.getElementById('player-select');
+      select.innerHTML = '';
+      players.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.innerText = p;
+        if (p === currentPlayer) opt.selected = true;
+        select.appendChild(opt);
+      });
+      document.getElementById('current-player-name').innerText = currentPlayer;
+    }
+
+    function changePlayer() {
+      const select = document.getElementById('player-select');
+      currentPlayer = select.value;
+      document.getElementById('current-player-name').innerText = currentPlayer;
+      resetRound();
+    }
+
+    // 名前変更機能
+    function editPlayerName(oldName) {
+      const newName = prompt(`「${oldName}」の新しい名前を入力してください:`, oldName);
+      if (!newName || newName.trim() === "" || newName === oldName) return;
+
+      const trimmedName = newName.trim();
+      if (players.includes(trimmedName)) {
+        alert("その名前はすでに使用されています。");
+        return;
+      }
+
+      // データの更新
+      const idx = players.indexOf(oldName);
+      if (idx !== -1) {
+        players[idx] = trimmedName;
+      }
+      scores[trimmedName] = scores[oldName] || 0;
+      delete scores[oldName];
+
+      if (currentPlayer === oldName) {
+        currentPlayer = trimmedName;
+      }
+
+      updatePlayerSelect();
+      updateScoreboard();
+    }
+
+    function editCurrentPlayerName() {
+      editPlayerName(currentPlayer);
+    }
+
+    function addPlayerPrompt() {
+      const name = prompt("新しい回答者の名前を入力してください:");
+      if (name && name.trim() !== "") {
+        const trimmed = name.trim();
+        if (!players.includes(trimmed)) {
+          players.push(trimmed);
+          scores[trimmed] = 0;
+          currentPlayer = trimmed;
+          updatePlayerSelect();
+          updateScoreboard();
+          resetRound();
+        } else {
+          alert("すでに存在する回答者名です。");
+        }
+      }
+    }
+
+    function deleteCurrentPlayer() {
+      if (players.length <= 1) {
+        alert("回答者は最低1人必要です。");
+        return;
+      }
+      if (confirm(`「${currentPlayer}」を削除してもよろしいですか？`)) {
+        delete scores[currentPlayer];
+        players = players.filter(p => p !== currentPlayer);
+        currentPlayer = players[0];
+        updatePlayerSelect();
+        updateScoreboard();
+        resetRound();
+      }
+    }
+
+    function updateScoreboard() {
+      const list = document.getElementById('score-list');
+      list.innerHTML = '';
+      players.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'score-item';
+        li.innerHTML = `
+          <div class="score-item-name">
+            <span>${p}</span>
+            <button class="icon-btn" onclick="editPlayerName('${p}')" style="font-size:0.8rem; padding:0 4px;">✏️</button>
+          </div>
+          <span class="score-count">${scores[p] || 0} 本</span>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    function resetAllScores() {
+      if (confirm("全員のIPPON獲得数をリセットしますか？")) {
+        players.forEach(p => scores[p] = 0);
+        updateScoreboard();
+      }
+    }
+
+    // --- 子機（クライアント）処理 ---
+    function initClient() {
+      const roomId = document.getElementById('room-id-input').value.trim();
+      if (!roomId) {
+        alert("ルームIDを入力してください。");
+        return;
+      }
+
+      document.getElementById('setup-screen').style.display = 'none';
+      document.getElementById('controller-screen').style.display = 'flex';
+
+      peer = new Peer();
+
+      peer.on('open', () => {
+        const conn = peer.connect(roomId);
+
+        conn.on('open', () => {
+          document.getElementById('client-status').innerText = '親機と接続完了！';
+          document.getElementById('client-status').style.color = 'var(--yellow)';
+
+          window.activeConnection = conn;
+        });
+
+        conn.on('data', (data) => {
+          if (data.type === 'RESET') {
+            myVotes = 0;
+            updateClientUI();
+          }
+        });
+
+        conn.on('close', () => {
+          document.getElementById('client-status').innerText = '切断されました';
+          document.getElementById('client-status').style.color = 'var(--accent)';
+        });
+      });
+    }
+
+    function sendVote() {
+      if (myVotes >= 2) return;
+      if (window.activeConnection) {
+        window.activeConnection.send({ type: 'VOTE' });
+        myVotes++;
+        updateClientUI();
+        initAudio();
+      }
+    }
+
+    function updateClientUI() {
+      document.getElementById('my-vote-count').innerText = myVotes;
+      const btn = document.getElementById('vote-btn');
+      if (myVotes >= 2) {
+        btn.disabled = true;
+        btn.innerText = "完了 (2/2)";
+      } else {
+        btn.disabled = false;
+        btn.innerText = "押す！";
+      }
+    }
+
+    // --- 紙吹雪（Confetti）エフェクト ---
+    let confettiInterval;
+    function startConfetti() {
+      const canvas = document.getElementById('confetti');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const pieces = Array.from({ length: 100 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height - canvas.height,
+        size: Math.random() * 12 + 6,
+        color: ['#ffd700', '#ffa500', '#ffffff', '#ff3333'][Math.floor(Math.random() * 4)],
+        speed: Math.random() * 5 + 3,
+        angle: Math.random() * 360
+      }));
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        pieces.forEach(p => {
+          ctx.beginPath();
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+          p.y += p.speed;
+          p.angle += 2;
+          if (p.y > canvas.height) p.y = -20;
+        });
+      }
+
+      confettiInterval = setInterval(draw, 20);
+    }
+
+    function stopConfetti() {
+      clearInterval(confettiInterval);
+      const canvas = document.getElementById('confetti');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  </script>
+</body>
+</html>
